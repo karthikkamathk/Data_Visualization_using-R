@@ -1,0 +1,98 @@
+---
+title: "Assignment-01"
+author: "Karthik Krishna Kamath, 18201357"
+date: "7 October 2018"
+output: html_document
+---
+
+##<span style="color:blue">**Task - 1, ANAL**
+
+
+###**1.** <span style="color:red">*Load dataset EurostatCrime2015 such that row names should be read as country names.*
+```{r}
+EurostatCrime2015 <- read.csv(choose.files(), row.names = 1)
+```
+
+
+###**2.** <span style="color:red">*Size and structure of the dataset*
+```{r}
+dim(EurostatCrime2015)
+str(EurostatCrime2015)
+```
+
+###**3.** <span style="color:red">*Adding a new variable and finally removing 3 variables from the dataset.*
+
+####*3.a) Adding a new variable called Sex.crime to the dataset*
+
+```{r}
+EurostatCrime2015$Sex.crime <- EurostatCrime2015$Rape + EurostatCrime2015$Sexual.assault + EurostatCrime2015$Sexual.violence #A new variable added, which is the sum of all sexual components : Rape, Sexual.assault and Sexual.violence 
+```
+
+####*3.b) Removing the 3 variables Rape, Sexual.assault and Sexual.violence*
+```{r}
+EurostatCrime2015 = subset(EurostatCrime2015, select= -c(3,5,6))
+```
+
+###**4.** <span style="color:red">*List of coutries with missing values.*
+```{r}
+CountriesWithNA = row.names(EurostatCrime2015[rowSums(is.na(EurostatCrime2015)) > 0,])
+CountriesWithNA
+```
+###**5.** <span style="color:red">*Removing the coutries with missing data from the dataframe*
+```{r}
+EurostatCrime2015_new = na.omit(EurostatCrime2015)
+```
+*Below table shows the dataframe without any missing values.*
+```{r}
+library(knitr)
+kable(EurostatCrime2015_new)
+```
+
+
+###**6.** <span style="color:red">*Size of the new dataframe created.*
+```{r}
+dim(EurostatCrime2015_new)
+```
+
+##<span style="color:blue">**DATA ANALYSIS**
+
+###**1.** <span style="color:red">*Most common crime in Ireland in 2015.*
+
+```{r}
+names(which.max(EurostatCrime2015_new["Ireland",]))
+```
+
+###**2.** <span style="color:red">*The 3 least common crimes in Ireland in 2015*
+
+```{r}
+Common3Crimes = sort(EurostatCrime2015_new["Ireland",], decreasing = TRUE)
+names(Common3Crimes[1:3])
+```
+
+###**3.** <span style="color:red">*Country having highest record of offences*
+
+```{r}
+HighOffenceCountry = sort(rowSums(EurostatCrime2015_new), decreasing = TRUE)
+names(HighOffenceCountry[1])
+```
+
+##<span style="color:blue">**DATA PLOTS**
+
+
+```{r}
+leastcrime = data.frame( value=sort(rowSums(EurostatCrime2015_new))[1:5], row.names = names(sort(rowSums(EurostatCrime2015_new))[1:5]))
+
+x1 <- barplot(height= leastcrime$value, main = "European Countries with Least Crimes", xlab = "Country Names", ylab = "Total Offences in 2015", col=rainbow(5), names.arg = rownames(leastcrime), ylim = c(0,500), las=1)
+text(x=x1, leastcrime$value, labels= leastcrime$value, pos=3, col="red")
+```
+
+**Inference:** *From the above bar graph it is clear that the country with least offences and safest among the other ones are Cyprus and Montenegro. Their total crimes are 161.05 and 191.61 per hundred thousand inhabitants respectively.The below graph represents the distribution of various crimes for these 2 countries above*
+
+```{r}
+countries <- EurostatCrime2015_new[row.names(leastcrime),]
+barplot(t(as.matrix(countries[c("Cyprus","Montenegro"),])), beside=TRUE,ylim=c(0,150), main = "Offences in Cyprus and Montenegro", xlab="Country Names", ylab="Offences in Europe for 2015", col=rainbow(5, start = 0.2), axis.lty="solid")
+legend("topleft", colnames(countries), title="Offences",inset = .01, fill=rainbow(5, start = 0.2),cex=.8)
+```
+
+**Inference:** *In both the countries the high crime is theft and the least crime is intentional homicide.*
+

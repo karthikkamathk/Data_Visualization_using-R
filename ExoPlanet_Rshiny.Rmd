@@ -1,0 +1,513 @@
+---
+title: "Final Project"
+author: "Karthik Krishna Kamath (18201347)"
+date: "27 August 2019"
+output: html_document
+runtime: shiny
+---
+
+
+## Introduction
+
+The project is carried out as a part of the curriculum to the course *Advanced data programming with R*. The project is based on a series of question related to a dataset called *Open exoData Catalogue*. The dataset is an open datasset and it is avialable in UCD brightspace. (All contents are avialable on the github link [https://github.com/hannorein/open_exoData_catalogue].
+
+## Dataset
+
+The Open exoData Catalogue is a database of all discovered extra-solar planets. New planets are usually added within 24 hours of their announcement.
+
+The following table below shows the metadata of exo_data provided on the UCD Brightspace.
+
+Column Names    |	Description
+----------------|----------------------------------------------------------------------------------------------------------------------------------
+id				      | Primary identifier of planet
+flag            | Binary flag [0=no known stellar binary companion; 1=P-type binary (circumbinary); 2=S-type binary; 3=orphan planet (no star)]
+mass            | Planetary mass [Jupiter masses]
+radius          | Radius [Jupiter radii]
+period          | Period [days]
+axis            | Semi-major axis [Astronomical Units]
+ecc             | Eccentricity
+per             | Periastron [degree]
+lon             | Longitude [degree]
+asc             | Ascending node [degree]
+incl            | Inclination [degree]
+temp            | Surface or equilibrium temperature [K]
+age             | Age [Gyr]
+meth            | Discovery method
+year            | Discovery year [yyyy]
+recency         | Last updated [yy/mm/dd]
+r_asc           | Right ascension [hh mm ss]
+decl            | Declination [+/-dd mm ss]
+dist            | Distance from Sun [parsec]
+host_mass       | Host star mass [Solar masses]
+host_rad        | Host star radius [Solar radii]
+host_met        | Host star metallicity [log relative to solar]
+host_temp       | Host star temperature [K]
+host_age        | Host star age [Gyr]
+lists           | A list of lists the planet is on
+
+
+The following libraries will be used in the project.
+
+```{r warning= FALSE}
+library(readr)
+library(dplyr)
+library(magrittr)
+library(ggplot2)
+library(shiny)
+library(rstan)
+library(shinystan)
+library(ggiraph)
+library(gganimate)
+library(reshape2)
+```
+
+## Questions & Answers.
+
+####1.  Import the dataset exo_data.csv as a tibble. Columns 1, 16, 17, 18, 25 should be characters. Columns 2, 14 should be factors. Column 15 should be integers. The remaining columns should be doubles.
+
+```{r warning=FALSE}
+setwd("E:/UCD/Thrid Sem/Advance_R/assignment/FinalProject")
+
+#importing the exoplanet data as a tibble
+exoData = as_tibble(read.csv("exo_data.csv"))
+
+colName = names(exoData) #getting the column names.
+
+#Chanigng the given columns into character, factor, interger and double using mutate_at functions.
+exoData = exoData %>% 
+  mutate_at(vars(colName[c(1, 16, 17, 18, 25)]), funs(as.character)) %>% 
+  mutate_at(vars(colName[c(2, 14)]), funs(as.factor)) %>%
+  mutate_at(vars(colName[15]), funs(as.integer)) %>%
+  mutate_at(vars(colName[c(setdiff(1:25, c(1, 16, 17, 18, 25, 2, 14, 15)))]), funs(as.double))
+```
+
+
+####2. Exclude the exoDatas with an unknown method of discovery.
+
+```{r}
+#removing the rows having NA and blank values in the column method of discovery (meth)
+exoData = exoData[!(is.na(exoData$meth) | exoData$meth == ""), ]
+```
+
+####3. Create a histogram for the log-distances from the Sun, highlighting the methods of discovery.
+
+```{r warning=FALSE, fig.align='center'}
+#histogram created using geom_histogram for log-distance from the sun.
+#Method of discovery is highlighted in the histogram
+hist_md = ggplot(exoData , 
+              aes(log(dist))) + 
+  #adding the histogram and highlighting the methods of discovery 
+  geom_histogram(aes(fill = meth), 
+                 alpha= 0.5, bins = 30,
+                 position = "dodge") +
+  ggtitle("Histogram for log-distances from Sun,\n by highlighting method of Discovery") + 
+  xlab("Log-Distance from the sun [parsec]") + 
+  scale_fill_discrete(name = "Method of \nDiscovery")
+
+#printing the log-mass adn log distance plot
+hist_md
+```
+
+####4. Create scatterplots of the log-mass versus log-distances, separating by methods of discovery. Hovering with thecursor highlights the point and displays its name, and, if you click, the exoplanet's page on the Open Exoplanet Catalogue will be opened. (paste the id after http://www.openexoplanetcatalogue.com/planet/ ).
+
+```{r warning=FALSE}
+#An interactive plot is developed with the help of ggplot2 and ggiraph package functions.
+#Each planets name id is shown while moving the pointer towards the point on the graph and on click it takes to the exoplanet page were the details of the planet is entered.
+
+#geom_point is used to make the scatterplots between log-distance and log-mass.
+#Interactive points are developed using geom_point_interactive from ggiraph package.
+int_scat_plot = ggplot(exoData, 
+                       aes(x = log(dist), 
+                           y = log(mass), 
+                           colour = meth)) + 
+  geom_point() + #plotting individual points.
+  ggtitle("Scatterplot of log-mass versus log-distance,\n by highlighting method of Discovery") + 
+  xlab("Log-Distance from the sun [parsec]") +
+  ylab("Log-Planetary Mass [Jupiter Masses]") +
+  scale_color_discrete(name="Method of\nDiscovery") + 
+  facet_wrap(~meth) +
+  geom_point_interactive(aes(tooltip = id, 
+                             data_id = id, 
+                             onclick = sprintf("window.open(\"%s%s\")",
+                                 "http://www.openexoplanetcatalogue.com/planet/",
+                                 as.character(id))),
+                         size = 2) #adding the interactive plot to the scatter plot.
+
+## creates the interective graph to be used in a web browser.
+ggiraph(code = print(int_scat_plot), width = 0.80)
+```
+
+####5. Rename the radius into jupiter_radius, and create a new column called earth_radius which is 11.2 times the Jupiter radius.
+
+```{r}
+#Renaming the radius column in exoplanet data to jupiter_radius using rename function in dplyr package.
+exoData = rename(exoData, 
+                 jupiter_radius = radius)
+
+#Adding new column earth_radius using mutate from dplyr package.
+exoData = mutate(exoData, earth_radius = jupiter_radius*11.2)
+```
+
+####6. Focus only on the rows where log-radius and log-period have no missing values, and perform kmeans with four clusters on these two columns.
+
+```{r}
+#subsets the earth_radius and period columns from exoplanet data which are not having any missing or blank values.
+radii_period_Data = exoData %>% 
+  select(period, earth_radius) %>% 
+  filter(!is.na(period) & !is.na(earth_radius))
+
+set.seed(18201357) #setting the seed to student id for getting same cluster analysis while running multiple times.
+km_res = kmeans(log(radii_period_Data), 4, nstart = 50) #kmeans perfomed for 4 cluster centers with nstart of 50 for the logarithm of distance and mass data.
+
+```
+
+####7. Add the clustering labels to the dataset through a new factor column called 'type', with levels 'rocky', 'hot_jupiters', 'cold_gas_giants', 'others'; similarly to https://en.wikipedia.org/wiki/Exoplanet#/media/File:ExoplanetPopulations-20170616.png
+
+```{r}
+#adding a new column "type" to the subset data for the clusters formed.
+radii_period_Data$type = factor(km_res$cluster)
+
+#Analysing the below graph we can find the cluster type as 'rocky', 'hot_jupiters', 'cold_gas_giants' and 'others'.
+
+#plotting the kmean clusters to findout the type of clusters.
+km_clust_plot = ggplot(radii_period_Data, aes(x= log(period), 
+                                              y= log(earth_radius), 
+                                              colour= type, shape=type)) +
+  geom_point() +
+  ggtitle("Kmean cluster plot for the analysis of type of clusters")
+
+#printing the cluster plot of kmean for analysing the cluster type names.
+km_clust_plot
+```
+
+From the above graph we can find the cluster types by comparing the graph given in https://en.wikipedia.org/wiki/Exoplanet#/media/File:ExoplanetPopulations-20170616.png. The cluster 1 relates to the type "others", similarly cluster 2 closely relates to "rocky" category type since it is mostly clustered over the left corner and lightly spreaded across center. The cluster 3 and 4 are closely related to "cold_gas_giants" and "hot_jupiters" respectively.
+
+Now we can include these cluster types as a column to the sub data set and to the orginal data set.
+
+```{r}
+#including the cluster type w.r.t the cluster centers 1:4.
+radii_period_Data$type = as.factor(ifelse(radii_period_Data$type == 1, "others",
+                                   ifelse(radii_period_Data$type == 2, "rocky",
+                                   ifelse(radii_period_Data$type == 3, "cold_gas_giants", "hot_jupiters"))))
+
+#adding the same "type" column to the original exo planet data.
+#For the original data the "type" column is updated with NA for values which where having missing and blanks for columns earth_radius and period.
+exoData$type = radii_period_Data$type[match(exoData$earth_radius, 
+                                            radii_period_Data$earth_radius) &
+                                        match(exoData$period, radii_period_Data$period)]
+
+#In the original data there are NA values got appended while inlcuding the type from radii_period_Data data.
+#Hence we can change these NA to "unknown" type so that there wont be any confusion and problems while proceesing further.
+
+exoData$type = factor(exoData$type, levels=c(levels(exoData$type), "unknown")) #adding a new factor level called "unknown".
+exoData$type[is.na(exoData$type)] = "unknown" #replacing all NA values with new factor level "unknown"
+```
+
+After adding the labels we can plot the graph once again for a better clarification of the clusters as seen in the given sample image from the html.
+
+```{r}
+km_clust_plot2 = ggplot(radii_period_Data, aes(x= log(period), 
+                                               y= log(earth_radius), 
+                                               colour= type, shape=type)) +
+  geom_point() + #Adding points to make a scatterplot.   
+  ggtitle("Kmean cluster plot for the exoplanet population") +
+  xlab("Orbital Log-period [days]") +
+  ylab("Size relative to log-earth radius[radii]") +
+  stat_ellipse( geom = "polygon", alpha = 0.25, aes(fill = type)) #adding geometric border for cluster types.
+
+#printing the cluster km plot by adding the type name to the cluster.
+km_clust_plot2
+```
+
+
+####8. Use a histogram and a violin plot to illustrate how these clusters relate to the log-mass of the exoplanet.
+
+```{r warning=FALSE}
+
+#histogram of log-mass with respect to the types of exoplanets.
+hist_clustmass = ggplot(exoData , 
+                        aes(x = log(mass))) + 
+  geom_histogram(aes(fill = type), bins = 20, alpha = .75, 
+                 position = "dodge") + #adding the histogram of log mass w.r.t cluster types
+  ggtitle("Histogram for log-mass,\n by highlighting cluster types ") + 
+  xlab("log-mass [jupiter masses]") + 
+  scale_fill_discrete(name = "Cluster types")
+
+#plotting the histogram of log-mass w.r.t cluster types.
+hist_clustmass
+
+#violin plot for log-mass w.r.t cluster types
+violin_clustmass = ggplot(exoData, 
+                          aes(x = type, y = log(mass), fill = type)) + 
+                  geom_violin() + #adding the violin plot
+                  ggtitle("Violin plot of log-mass versus the type of exoplanets")
+                        
+
+#printing the violin plot
+violin_clustmass
+
+```
+
+####9. Transform r_asc and decl into the equivalent values in seconds and use these as coordinates to represent a celestial map for the exoplanets.
+
+```{r}
+#function to convert the character time with spaces in between to seconds.
+charTime_to_sec = function(x) {
+
+ x <- strsplit(x, " ", TRUE)[[1]]
+ x <- as.numeric(x)
+ x <- x * (c(3600, 60, 1))
+
+ sum(x)
+}
+
+#transforming the columns r_asc and decl to seconds as new vectors
+r_asc_sec = sapply(exoData$r_asc, charTime_to_sec, USE.NAMES=FALSE)
+decl_sec = sapply(exoData$decl, charTime_to_sec, USE.NAMES=FALSE)
+
+#Generating a tibble with the above 2 vectors.
+r_asc_declData = tibble(r_asc_sec, decl_sec)
+
+#Celestial-scatterplot map for exoplanets
+ggplot(r_asc_declData, aes(x= r_asc_sec, y=decl_sec)) +
+  geom_point() + #adding points based on the r_asc and decl which is in seconds.
+  ggtitle("Celestial-scatterplot map for the exoplanets") +
+  xlab("Right ascension [seconds]") +
+  ylab("Declination [seconds]")
+  
+```
+
+####10. Create an animated time series where multiple lines illustrate the evolution over time of the total number of exoplanets discovered for each method up to that year.
+
+```{r}
+#time series data for exoplanet consisting the year on which they discovered and the ID and method of discovery.
+timeSeries_exodata = na.omit(exoData[, c("meth", "year")])
+
+#getting each years freaquency for methods of discovery.
+timeSeries_exodata <- subset(as.data.frame(table(timeSeries_exodata)), Freq != 0)
+
+#getting cummulative frequency for methods of discovery corresponding to every year.
+timeSeries_exodata = timeSeries_exodata %>% arrange(meth, year) %>% group_by(meth) %>% mutate(cumfreq = cumsum(Freq))
+  
+#converting the year varaible from factor to numeric.
+timeSeries_exodata$year = as.numeric(as.character(timeSeries_exodata$year))
+
+#Creating animation plot.
+anim_plot <- ggplot(timeSeries_exodata, aes(x = year, 
+                                            y = cumfreq, 
+                                            colour = meth)) +
+  geom_line() +
+  scale_color_viridis_d() +
+  labs(title = "Animation Plot for total exoplanets discovered for each method in each year", 
+       x = "Year", 
+       y = "Method Count") +
+  theme(legend.position = "top") +
+  geom_point() +
+  transition_reveal(year)
+
+#plotting the animation plot
+anim_plot
+
+```
+
+####11.Create an interactive plot with Shiny where you can select the year (slider widget, with values >= 2009) and exoplanet type. Exoplanets appear as points on a scatterplot (log-mass vs log-distance coloured by method) only if they have already been discovered. If type is equal to "all" all types are plotted together.
+
+```{r}
+#define ui for the application that draws a scatterplot
+ui = fluidPage(
+  
+  #Application title
+  titlePanel("Scatterplot of log-mass versus log-distance,\n by exoplanet type"),
+  
+  #sidebar with a slider input for selecting year and select input for selecting the types
+  sidebarLayout(
+    sidebarPanel(
+      
+      #slider bar for selecting year.
+      sliderInput(inputId = "year", label = "Select a Year:", 
+                  value=2014, min=2009, max=2018),
+      
+      #select input for selecting types.
+      selectInput(inputId = "type", label = "Type Index", 
+                  choices = c(levels(exoData$type), "all"),
+                  selected = "all")
+    ),
+    
+    #show a plot of generated scatter plot.
+    mainPanel(
+      plotOutput("scattplot")
+    )
+  )
+)
+
+#define server logic function required to draw the scatterplot.
+server = function(input, output){
+  
+  #create scatterplot object the output plot function is expecting.
+  output$scattplot = renderPlot({
+    
+    #Create subset for plotting scatterplot according to year and type.
+    type_data = exoData
+    if(input$type == "all"){
+           type_data = subset(type_data, as.numeric(type_data$year) == input$year)
+    }
+    else{
+      type_data = subset(type_data, as.numeric(type_data$year) == input$year &
+                                type_data$type == input$type)
+    }
+
+    #draw the scatterplot with the year and type specified.
+    ggplot(type_data, 
+           aes(x = log(dist), 
+               y = log(mass))) + 
+      geom_point(aes(colour = type, fill= type)) + #plotting scatter points. 
+      xlab("Log-Distance from the sun [parsec]") +
+      ylab("Log-Planetary Mass [Jupiter Masses]")
+  })
+}
+
+# Run the application 
+shinyApp(ui = ui, server = server)
+```
+
+For 15th question we can change the run time of the RMD file to Shiny for running the shiny app properly.
+
+
+####12. Use STAN to perform likelihood maximisation on a regression model where log-period is the response variable and the logs of host_mass, host_temp and axis are the covariates (exclude rows that contain at least one missing value). Include an intercept term in the regression model.
+
+```{r}
+
+#preparing the regression variables data set without NA or blank values.
+lin_reg_data = na.omit(log(exoData[, c("period", "host_mass", "host_temp", "axis")]))
+
+# Set it up in a list with the same names as in the stan file
+stan_modData = list(N = nrow(lin_reg_data), 
+                    x1 = lin_reg_data$host_mass, 
+                    x2 = lin_reg_data$host_temp, 
+                    x3 = lin_reg_data$axis, 
+                    y = lin_reg_data$period)
+
+#writing the stan model file and storing in the working directory.
+write("// Stan model for simple linear regression
+      
+      data {
+      int < lower = 1 > N; // Sample size of the data
+      vector[N] x1; // explanatory variable
+      vector[N] x2; // explanatory variable
+      vector[N] x3; // explanatory variable
+      vector[N] y; // response variable (output)
+      } 
+      
+      parameters {
+      real alpha; // Intercept
+      real beta1; // Slope (regression coefficients)
+      real beta2; // Slope (regression coefficients)
+      real beta3; // Slope (regression coefficients)
+      real < lower = 0 > sigma; // residual SD
+      }
+      
+      model {
+      y ~ normal(alpha + (x1 * beta1) + (x2 * beta2) + (x3 * beta3) ,sigma);
+      }
+      
+      generated quantities {
+      } // The posterior predictive distribution of the model",
+
+"lin_reg_model_1.stan")
+
+#maximum likelihood version
+stan_mod_lr_fit = stan_model(file = "lin_reg_model_1.stan")
+stan_mod_lr_fit_ml = optimizing(stan_mod_lr_fit, data = stan_modData)
+
+#printing the maximum likelihood estimate results.
+print(stan_mod_lr_fit_ml)
+
+```
+
+####13. Extend the model in (12) by specifying standard Gaussian priors for the intercept and slope terms, and a Gamma(1,1) prior for the standard deviation of errors. Obtain approximate samples from the posterior distribution of the model. 
+
+```{r}
+
+#writing the stan model file and storing in the working directory.
+write("// Stan model for regression
+      
+      data {
+      int < lower = 1 > N; // Sample size
+      vector[N] x1; // explanatory variable
+      vector[N] x2; // explanatory variable
+      vector[N] x3; // explanatory varaible
+      vector[N] y; // response varaible; (outcome)
+      }
+      
+      parameters {
+      real alpha; // Intercept
+      real beta1; // Slope (regression coefficients)
+      real beta2; // Slope (regression coefficients)
+      real beta3; // Slope (regression coefficients)
+      real < lower = 0 > sigma; // residual Standard deviation
+      }
+      
+      model {
+      alpha ~ normal(0, 1);
+      beta1 ~ normal(0, 1);
+      beta2 ~ normal(0, 1);
+      beta3 ~ normal(0, 1);
+      sigma ~ gamma(1,1);
+      y ~ normal(alpha + (x1 * beta1) + (x2 * beta2) + (x3 * beta3) ,sigma);
+      }
+      
+      generated quantities {
+      } // The posterior predictive distribution of the model",
+
+      "lin_reg_model_2.stan")
+
+
+stan_mod_lr_fit2 = stan_model(file = "lin_reg_model_2.stan")
+options(mc.cores = parallel::detectCores())
+
+# The full Bayesian way
+stan_mod_lr_fit2_bayes=sampling(stan_mod_lr_fit2, data = stan_modData)
+
+# Displaying results of bayesian fit model.
+print(stan_mod_lr_fit2_bayes)
+
+```
+
+As the rhat value is equal to 1 for all parameters involved,it is concluded that the stan model is converged
+
+####14. Include in your RMarkdown document a few posterior summaries plots (e.g. estimated posterior densities) from (13) for the parameters of interest.
+
+```{r plots, echo=TRUE}
+
+plot(stan_mod_lr_fit2_bayes)
+
+#getting posterior results
+posterior = extract(stan_mod_lr_fit2_bayes)
+
+# Plotting the relationships of parameters
+plot(posterior$alpha, posterior$beta1)
+plot(posterior$alpha, posterior$beta2)
+plot(posterior$alpha, posterior$beta3)
+plot(posterior$alpha, posterior$sigma)
+
+#estimated posterior densities of parameters involved
+stan_dens(stan_mod_lr_fit2_bayes)
+
+```
+
+```{r}
+#checking the convergence of the model (in each chain)
+#trace plot for intercept and slope coefficients.
+par(mfrow = c(2,3))
+plot(posterior$alpha, type = "l")
+plot(posterior$beta1, type = "l")
+plot(posterior$beta2, type = "l")
+plot(posterior$beta3, type = "l")
+plot(posterior$sigma, type = "l")
+
+par(mfrow = c(1,1))
+```
+
+####15. Embed the Shiny app from (11) in your RMarkdown document.
+
+We can change the run time of the RMD file to Shiny for running the shiny app properly.
